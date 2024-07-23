@@ -11,7 +11,7 @@ cp -f $PWD/.devcontainer/install-xe.php $PWD/config/install.config.php
 sudo ln -s $PWD /var/www/xe
 
 # create db (only first time)
-sudo service mysql start
+sudo service mariadb start
 sudo mysql -uroot -proot -e "CREATE DATABASE xpressengine CHARSET utf8mb4 COLLATE utf8mb4_unicode_ci"
 sudo mysql -uroot -proot -e "CREATE USER 'xpressengine'@localhost IDENTIFIED BY 'xpressengine'"
 sudo mysql -uroot -proot -e "GRANT ALL ON xpressengine.* to xpressengine@localhost; FLUSH PRIVILEGES"
