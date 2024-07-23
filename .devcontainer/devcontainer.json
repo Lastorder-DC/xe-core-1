@@ -1,9 +1,9 @@
 {
 	"name": "XE Core with Apache(Unofficial patch applied)",
-	"image": "mcr.microsoft.com/devcontainers/base:focal",
+	"image": "mcr.microsoft.com/devcontainers/base:jammy",
 	"features": {
 		"ghcr.io/rocker-org/devcontainer-features/apt-packages:1": {
-			"packages": "curl, apache2, mariadb-client, mariadb-server, php7.4, php7.4-curl, php7.4-gd, php7.4-mbstring, php7.4-json, php7.4-mysql, php7.4-xml, php7.4-opcache, php7.4-apcu, php7.4-intl, php7.4-zip",
+			"packages": "curl, apache2, mariadb-client, mariadb-server, php, php-curl, php-gd, php-mbstring, php-json, php-mysql, php-xml, php-opcache, php-apcu, php-intl, php-zip",
 			"upgradePackages": false
 		}
 	},
