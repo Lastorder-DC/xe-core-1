@@ -22,11 +22,6 @@ if(!defined('__XE__'))
 }
 
 /**
- * @deprecated __ZBXE__ will be removed. Use __XE__ instead.
- */
-define('__ZBXE__', __XE__);
-
-/**
  * Display XE's full version.
  */
 define('__XE_VERSION__', '1.11.17');
@@ -36,20 +31,20 @@ define('__XE_VERSION_RC__', (stripos(__XE_VERSION__, 'rc') !== false));
 define('__XE_VERSION_STABLE__', (!__XE_VERSION_ALPHA__ && !__XE_VERSION_BETA__ && !__XE_VERSION_RC__));
 
 define('__XE_MIN_PHP_VERSION__', '5.3.0');
-define('__XE_RECOMMEND_PHP_VERSION__', '5.6.4');
+define('__XE_RECOMMEND_PHP_VERSION__', '7.4.0');
 
 /**
- * @deprecated __ZBXE_VERSION__ will be removed. Use __XE_VERSION__ instead.
+ * Constant for backward compatibility
  */
+define('__ZBXE__', __XE__);
 define('__ZBXE_VERSION__', __XE_VERSION__);
 
 /**
- * The base path to where you installed zbXE Wanted
+ * Base path of the XE installation
  */
 define('_XE_PATH_', str_replace('config/config.inc.php', '', str_replace('\\', '/', __FILE__)));
 
-
-// Set can use other method instead cookie to store session id(for file upload)
+// Disable strict cookie requirement for sessions to support legacy file uploaders
 ini_set('session.use_only_cookies', 0);
 
 if(file_exists(_XE_PATH_ . 'config/package.inc.php'))
