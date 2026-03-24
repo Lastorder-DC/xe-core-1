@@ -717,6 +717,9 @@ class fileController extends file
 	 */
 	function insertFile($file_info, $module_srl, $upload_target_srl, $download_count = 0, $manual_insert = false)
 	{
+		$file_info['extension'] = strtolower(pathinfo($file_info['name'], PATHINFO_EXTENSION));
+		$file_info['original_extension'] = $file_info['extension'];
+
 		// Call a trigger (before)
 		$trigger_obj = new stdClass;
 		$trigger_obj->module_srl = $module_srl;
@@ -724,17 +727,12 @@ class fileController extends file
 		$output = ModuleHandler::triggerCall('file.insertFile', 'before', $trigger_obj);
 		if(!$output->toBool()) return $output;
 
-		// A workaround for Firefox upload bug
-		if(preg_match('/^=\?UTF-8\?B\?(.+)\?=$/i', $file_info['name'], $match))
-		{
-			$file_info['name'] = base64_decode(strtr($match[1], ':', '/'));
-		}
+		$logged_info = Context::get('logged_info');
+		$is_admin = ($logged_info && isset($logged_info->is_admin) && $logged_info->is_admin == 'Y');
 
 		if(!$manual_insert)
 		{
-			// Get the file configurations
-			$logged_info = Context::get('logged_info');
-			if($logged_info->is_admin != 'Y')
+			if(!$is_admin)
 			{
 				$oFileModel = getModel('file');
 				$config = $oFileModel->getFileConfig($module_srl);
@@ -742,16 +740,9 @@ class fileController extends file
 				// check file type
 				if(isset($config->allowed_filetypes) && $config->allowed_filetypes !== '*.*')
 				{
-					$filetypes = explode(';', $config->allowed_filetypes);
-					$ext = array();
-					foreach($filetypes as $item) {
-						$item = explode('.', $item);
-						$ext[] = strtolower($item[1]);
-					}
-					$uploaded_ext = explode('.', $file_info['name']);
-					$uploaded_ext = strtolower(array_pop($uploaded_ext));
+					$allowed_exts = array_map('strtolower', array_map('trim', explode(';', str_replace('*.', '', $config->allowed_filetypes))));
 
-					if(!in_array($uploaded_ext, $ext))
+					if(!in_array($file_info['extension'], $allowed_exts))
 					{
 						return $this->stop('msg_not_allowed_filetype');
 					}
@@ -759,81 +750,99 @@ class fileController extends file
 
 				$allowed_filesize = $config->allowed_filesize * 1024 * 1024;
 				$allowed_attach_size = $config->allowed_attach_size * 1024 * 1024;
-				// An error appears if file size exceeds a limit
-				if($allowed_filesize < filesize($file_info['tmp_name'])) return new BaseObject(-1, 'msg_exceeds_limit_size');
-				// Get total file size of all attachements (from DB)
+				$tmp_filesize = filesize($file_info['tmp_name']);
+
+				if($allowed_filesize < $tmp_filesize) return new BaseObject(-1, 'msg_exceeds_limit_size');
+
 				$size_args = new stdClass;
 				$size_args->upload_target_srl = $upload_target_srl;
 				$output = executeQuery('file.getAttachedFileSize', $size_args);
-				$attached_size = (int)$output->data->attached_size + filesize($file_info['tmp_name']);
+
+				$attached_size = (int)$output->data->attached_size + $tmp_filesize;
 				if($attached_size > $allowed_attach_size) return new BaseObject(-1, 'msg_exceeds_limit_size');
 			}
 		}
 
-		// https://github.com/xpressengine/xe-core/issues/1713
 		$file_info['name'] = preg_replace('/\.((ph(p|t|ar)?[0-9]?|p?html?|cgi|pl|exe|(?:a|j)sp|inc).*)$/i', '$0-x',$file_info['name']);
 		$file_info['name'] = removeHackTag($file_info['name']);
 		$file_info['name'] = str_replace(array('<','>'),array('%3C','%3E'),$file_info['name']);
 		$file_info['name'] = str_replace('&amp;', '&', $file_info['name']);
 
-		// Get random number generator
+		$is_svg = false;
+		$is_xml = false;
+
+		if (file_exists($file_info['tmp_name'])) {
+			$content_sample = file_get_contents($file_info['tmp_name'], false, NULL, 0, 4096);
+			
+			if (stripos($content_sample, '<svg') !== false) {
+				$is_svg = true;
+			} 
+			elseif (stripos($content_sample, '<?xml') !== false) {
+				$is_xml = true;
+			}
+
+			if ($is_svg && !$is_admin) {
+				$sanitizer = new SvgSanitizer();
+				$sanitizer->load($file_info['tmp_name']);
+				$sanitizer->sanitize();
+				$sanitizer->save($file_info['tmp_name']);
+			}
+		}
+
+		if ($is_svg || $is_xml) {
+			$direct_download = 'N';
+		} else {
+			if (preg_match("/\.(jpe?g|gif|png|wm[va]|mpe?g|avi|flv|mp[1-4]|as[fx]|wav|midi?|moo?v|qt|r[am]{1,2}|m4v)$/i", $file_info['name'])) {
+				$direct_download = 'Y';
+			} else {
+				$direct_download = 'N';
+			}
+		}
+
+		// Get random number generator and create secure hex
 		$random = new Password();
+		$secure_hex = $random->createSecureSalt(32, 'hex');
+		$ext = $file_info['extension'];
 
-		// Set upload path by checking if the attachement is an image or other kinds of file
-		if(preg_match("/\.(jpe?g|gif|png|wm[va]|mpe?g|avi|flv|mp[1-4]|as[fx]|wav|midi?|moo?v|qt|r[am]{1,2}|m4v)$/i", $file_info['name']))
+		if ($direct_download === 'Y') 
 		{
-			$path = sprintf("./files/attach/images/%s/%s", $module_srl,getNumberingPath($upload_target_srl,3));
-
-			// special character to '_'
-			// change to random file name. because window php bug. window php is not recognize unicode character file name - by cherryfilter
-			$ext = substr(strrchr($file_info['name'],'.'),1);
-			//$_filename = preg_replace('/[#$&*?+%"\']/', '_', $file_info['name']);
-			$_filename = $random->createSecureSalt(32, 'hex').'.'.$ext;
-			$filename  = $path.$_filename;
+			$path = sprintf("./files/attach/images/%s/%s/", $module_srl, getNumberingPath($upload_target_srl, 3));
+			$_filename = $secure_hex . '.' . $ext;
+			$filename = $path . $_filename;
+			
 			$idx = 1;
 			while(file_exists($filename))
 			{
-				$filename = $path.preg_replace('/\.([a-z0-9]+)$/i','_'.$idx.'.$1',$_filename);
+				$filename = $path . $secure_hex . '_' . $idx . '.' . $ext;
 				$idx++;
 			}
-			$direct_download = 'Y';
-		}
-		else
+		} 
+		else 
 		{
-			$path = sprintf("./files/attach/binaries/%s/%s", $module_srl, getNumberingPath($upload_target_srl,3));
-			$filename = $path.$random->createSecureSalt(32, 'hex');
-			$direct_download = 'N';
+			$path = sprintf("./files/attach/binaries/%s/%s/", $module_srl, getNumberingPath($upload_target_srl, 3));
+			$filename = $path . $secure_hex;
 		}
+
 		// Create a directory
 		if(!FileHandler::makeDir($path)) return new BaseObject(-1,'msg_not_permitted_create');
 
 		// Check uploaded file
 		if(!$manual_insert && !checkUploadedFile($file_info['tmp_name'], $file_info['name']))  return new BaseObject(-1,'msg_file_upload_error');
-
-		// Get random number generator
-		$random = new Password();
 		
 		// Move the file
 		if($manual_insert)
 		{
-			@copy($file_info['tmp_name'], $filename);
-			if(!file_exists($filename))
-			{
-				$filename = $path.$random->createSecureSalt(32, 'hex').'.'.$ext;
-				@copy($file_info['tmp_name'], $filename);
-			}
+			if(!@copy($file_info['tmp_name'], $filename)) return new BaseObject(-1,'msg_file_upload_error');
 		}
 		else
 		{
-			if(!@move_uploaded_file($file_info['tmp_name'], $filename))
-			{
-				$filename = $path.$random->createSecureSalt(32, 'hex').'.'.$ext;
-				if(!@move_uploaded_file($file_info['tmp_name'], $filename))  return new BaseObject(-1,'msg_file_upload_error');
-			}
+			if(!@move_uploaded_file($file_info['tmp_name'], $filename)) return new BaseObject(-1,'msg_file_upload_error');
 		}
+
 		// Get member information
 		$oMemberModel = getModel('member');
 		$member_srl = $oMemberModel->getLoggedMemberSrl();
+
 		// List file information
 		$args = new stdClass;
 		$args->file_srl = getNextSequence();
@@ -850,6 +859,7 @@ class fileController extends file
 
 		$output = executeQuery('file.insertFile', $args);
 		if(!$output->toBool()) return $output;
+
 		// Call a trigger (after)
 		$trigger_output = ModuleHandler::triggerCall('file.insertFile', 'after', $args);
 		if(!$trigger_output->toBool()) return $trigger_output;
@@ -1145,4 +1155,3 @@ class fileController extends file
 }
 /* End of file file.controller.php */
 /* Location: ./modules/file/file.controller.php */
-
