@@ -204,9 +204,7 @@ class addonAdminController extends addonController
 		unset($args->body);
 		unset($args->error_return_url);
 
-		$args->xe_run_method = $args->xe_run_method ?? '';
-		if (!in_array($args->xe_run_method, ['run_selected', 'no_run_selected']))
-		{
+		if (!isset($args->xe_run_method) || $args->xe_run_method !== 'no_run_selected') {
 			$args->xe_run_method = 'run_selected';
 		}
 
