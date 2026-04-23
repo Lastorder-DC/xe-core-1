@@ -59,12 +59,19 @@ class boardAPI extends board {
 	 **/
 	function dispBoardContentView(&$oModule) {
 		$oDocument = Context::get('oDocument');
-		$extra_vars = $oDocument->getExtraVars();
-		if($oDocument->isGranted())
+		if($oDocument->isExists() && $oDocument->isAccessible())
 		{
-			$oDocument->add('extra_vars',$this->arrangeExtraVars($extra_vars));
+			if ($oDocument->isGranted())
+			{
+				$extra_vars = $oDocument->getExtraVars() ?: [];
+				$oDocument->add('extra_vars', $this->arrangeExtraVars($extra_vars));
+			}
+			$oModule->add('oDocument',$this->arrangeContent($oDocument));
 		}
-		$oModule->add('oDocument',$this->arrangeContent($oDocument));
+		else
+		{
+			$oModule->add('oDocument',null);
+		}
 	}
 
 
@@ -73,7 +80,7 @@ class boardAPI extends board {
 	 **/
 	function dispBoardContentFileList(&$oModule) {
 		$oDocument = Context::get('oDocument');
-		if($oDocument->isAccessible())
+		if($oDocument->isExists() && $oDocument->isAccessible())
 		{
 			$oModule->add('file_list', $this->arrangeFile(Context::get('file_list')));
 		}
@@ -95,7 +102,20 @@ class boardAPI extends board {
 	 * @brief comments list
 	 **/
 	function dispBoardContentCommentList(&$oModule) {
-		$oModule->add('comment_list',$this->arrangeComment(Context::get('comment_list')));
+		$oDocument = Context::get('oDocument');
+		if ($oDocument->isExists() && $oDocument->isAccessible())
+		{
+			$comment_list = Context::get('comment_list');
+			if (!is_array($comment_list))
+			{
+				$comment_list = [];
+			}
+			$oModule->add('comment_list', $this->arrangeComment($comment_list));
+		}
+		else
+		{
+			$oModule->add('comment_list', []);
+		}
 	}
 
 	function arrangeContentList($content_list) {
