@@ -2042,7 +2042,7 @@ class Context
 	 *
 	 * @return BaseObject Request variables.
 	 */
-	function getRequestVars()
+	static function getRequestVars()
 	{
 		$self = self::getInstance();
 		if($self->get_vars)

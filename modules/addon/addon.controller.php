@@ -101,7 +101,9 @@ class addonController extends addon
 			}
 
 			$buff[] = '$before_time = microtime(true);';
-			$buff[] = '$rm = \'' . $extra_vars->xe_run_method . "';";
+
+			$run_method = strval($extra_vars->xe_run_method ?? 'run_selected');
+			$buff[] = '$rm = ' . var_export($run_method, true) . ';';
 			$buff[] = '$ml = array(';
 			if($mid_list)
 			{
